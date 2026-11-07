@@ -1,6 +1,6 @@
 {
   "name": "css-coverage-tracker",
-  "version": "1.0.0",
+  "version": "2.0.0-alpha.0",
   "description": "Find unused CSS safely: runtime selector coverage across navigations, tabs and test runs. State-aware, framework-agnostic, CI-ready.",
   "keywords": [
     "css",
