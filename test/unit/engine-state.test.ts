@@ -8,7 +8,7 @@ import {
   toPersisted,
   upsertSelector,
 } from '../../src/core/engine/state'
-import { defaultRouteKey } from '../../src/core/route/route-key'
+import { defaultRouteKey, matchRoutePattern } from '../../src/core/route/route-key'
 import { migrateV1 } from '../../src/core/store/migrate-v1'
 
 const record = (selector: string, patch: Partial<SelectorRecord> = {}): SelectorRecord => ({
@@ -111,6 +111,13 @@ describe('defaultRouteKey', () => {
     ['https://x.test/commit/a1b2c3d4e5f60718', '/commit/:id'],
     ['https://x.test/blog/hello-world?page=2#top', '/blog/hello-world'],
     ['https://x.test/docs/', '/docs'],
+    // slugs carrying an id: one route for all pages of the type
+    ['https://x.test/jobs/senior-dev-berlin---3f2a9c1e-0b5d-4c3a-9e1f-1a2b3c4d5e6f', '/jobs/:slug'],
+    ['https://x.test/p/blue-shirt_a1b2c3d4e5f60718', '/p/:slug'],
+    ['https://x.test/artikel/neue-regeln-1234567', '/artikel/:slug'],
+    // short trailing numbers are ordinary slugs
+    ['https://x.test/products/iphone-15', '/products/iphone-15'],
+    ['https://x.test/archive-2024', '/archive-2024'],
   ])('%s → %s', (url, expected) => {
     expect(defaultRouteKey(new URL(url))).toBe(expected)
   })
@@ -119,6 +126,27 @@ describe('defaultRouteKey', () => {
     expect(defaultRouteKey(new URL('https://x.test/a?tab=b#c'), { search: true, hash: true })).toBe(
       '/a?tab=b#c',
     )
+  })
+})
+
+describe('matchRoutePattern', () => {
+  const patterns = ['/jobs/:slug', '/docs/*', '/teams/:team/members/:id']
+  it.each([
+    ['/jobs/senior-dev---42', '/jobs/:slug'],
+    ['/jobs/a/', '/jobs/:slug'],
+    ['/docs', '/docs/*'],
+    ['/docs/a/b', '/docs/*'],
+    ['/teams/x/members/7', '/teams/:team/members/:id'],
+    ['/jobs', null],
+    ['/jobs/a/b', null],
+    ['/teams/x/members', null],
+  ])('%s → %s', (path, expected) => {
+    expect(matchRoutePattern(path, patterns)).toBe(expected)
+  })
+
+  it('treats regex characters in patterns literally', () => {
+    expect(matchRoutePattern('/a.b', ['/a.b'])).toBe('/a.b')
+    expect(matchRoutePattern('/axb', ['/a.b'])).toBeNull()
   })
 })
 

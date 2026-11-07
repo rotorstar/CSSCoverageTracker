@@ -86,7 +86,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 }
 ```
 
-`routePattern()` groups `/blog/a` and `/blog/b` into `/blog/[slug]`; `sitemap: true` reads `/sitemap.xml` as route inventory (needed for high-confidence deletions).
+`routePattern()` groups `/blog/a` and `/blog/b` into `/blog/[slug]`; `sitemap: true` reads `/sitemap.xml` as route inventory (needed for high-confidence deletions); a sitemap index is followed into its same-origin child sitemaps (`.xml.gz` too).
 
 ### React Router, TanStack Router, any React app
 
@@ -186,7 +186,7 @@ The tracker tells you what is safe to remove and how many bytes that is. Prove t
 export { test, expect } from 'css-coverage-tracker/playwright'
 ```
 
-Every test writes a report to `coverage/css/`. Interactions in your tests (opening dialogs, menus, popovers) turn `state-dependent` selectors into `used` ones. Configure with `test.use({ cssCoverageDir: 'coverage/css', cssCoverageOptions: { knownRoutes: […] } })`.
+Every test writes a report to `coverage/css/`. Interactions in your tests (opening dialogs, menus, popovers) turn `state-dependent` selectors into `used` ones. Configure with `test.use({ cssCoverageDir: 'coverage/css', cssCoverageOptions: { knownRoutes: […], routePatterns: ['/jobs/:slug'] } })`. Options cross into the page as JSON, so functions such as `routeKey` cannot be passed there; use `routePatterns`.
 
 ### CLI
 
@@ -228,8 +228,9 @@ const report = await tracker.getReport() // report v2 (JSON)
 | `storageKey` | `'css-coverage-tracker'` | IndexedDB key; v1 localStorage data under this key is migrated. |
 | `storage` | `'indexeddb'` | `'memory'` keeps data per page only. IndexedDB failures (quota) fall back to memory with a warning. |
 | `knownRoutes` | `[]` | Route inventory for coverage and confidence. |
-| `sitemap` | `false` | `true` or a URL: read routes from a same-origin sitemap. |
-| `routeKey` | ids → `:id` | Map a URL to a route key. |
+| `sitemap` | `false` | `true` or a URL: read routes from a same-origin sitemap or sitemap index. |
+| `routePatterns` | `[]` | Path patterns checked first (`/jobs/:slug`, `/docs/*`): a matching path is keyed by its pattern. JSON-safe. |
+| `routeKey` | ids → `:id`, `slug---<id>` → `:slug` | Map a URL to a route key. |
 | `navigation` | `'auto'` | `'manual'`: call `tracker.notifyNavigation(route)` yourself. |
 | `state` | `DEFAULT_STATE` | Attributes and classes treated as runtime state. |
 | `exclude` | — | Elements that never count as usage. |

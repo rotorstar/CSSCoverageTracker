@@ -12,12 +12,34 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test as base } from '@playwright/test'
+import type { TrackerOptions } from '../core/api'
+
+/**
+ * Tracker options the fixture can pass into the page: the JSON-serializable
+ * ones. Functions (`routeKey`, `exclude`) cannot cross into the browser; use
+ * `routePatterns` (`['/jobs/:slug', '/docs/*']`) to group routes instead.
+ */
+export type CssCoverageTrackerOptions = Pick<
+  TrackerOptions,
+  | 'storageKey'
+  | 'storage'
+  | 'routePatterns'
+  | 'knownRoutes'
+  | 'sitemap'
+  | 'state'
+  | 'debounceMs'
+  | 'navigation'
+  | 'ui'
+  | 'fetchCrossOrigin'
+  | 'scanScripts'
+  | 'confidenceThreshold'
+>
 
 export interface CssCoverageFixtureOptions {
   /** Directory for per-test reports. @default 'coverage/css' */
   cssCoverageDir: string
   /** Tracker options passed to the page (JSON-serializable subset). */
-  cssCoverageOptions: Record<string, unknown>
+  cssCoverageOptions: CssCoverageTrackerOptions
 }
 
 const iife = fileURLToPath(new URL('./css-coverage-tracker.iife.js', import.meta.url))

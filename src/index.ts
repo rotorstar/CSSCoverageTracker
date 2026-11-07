@@ -15,7 +15,7 @@ export type {
   SourceRecord,
 } from './core/engine/state'
 export type { Confidence, Report, ReportSelector, ReportSource } from './core/report/types'
-export { defaultRouteKey, routePattern } from './core/route/route-key'
+export { defaultRouteKey, matchRoutePattern, routePattern } from './core/route/route-key'
 export { DEFAULT_STATE, type StateConfig } from './core/selector/normalize'
 export type {
   AnalyzeOptions,

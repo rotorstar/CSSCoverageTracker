@@ -74,6 +74,8 @@ describe.runIf(observable)('performance (Chromium)', () => {
     tracker.notifyNavigation('/first')
     await tracker.idle() // includes deferred byte accounting, which must not cause long frames either
     const coldMs = performance.now() - coldStart
+    // end the frame before the first blocking v1 run (see the loop below)
+    await new Promise(r => setTimeout(r, 60))
 
     // per-navigation cost on the next route (what users pay on every client-side navigation);
     // medians of 5 runs keep shared CI machines from deciding the result

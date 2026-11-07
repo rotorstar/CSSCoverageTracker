@@ -2,6 +2,7 @@ import { afterEach, describe, expect, inject, it } from 'vitest'
 import { createCoverageTracker } from '../../src/index'
 import linkedUrl from '../fixtures/css/linked.css?url'
 import sitemapUrl from '../fixtures/sitemap.xml?url'
+import sitemapIndexUrl from '../fixtures/sitemap-index.xml?url'
 
 const cleanups: Array<() => void> = []
 afterEach(() => {
@@ -67,6 +68,17 @@ describe('report v2 from a live page', () => {
     expect(find(`.${['linked', 'dead', 'b'].join('-')}`)?.referencedInJs).toBe(false)
 
     expect(report.knownRoutes.sort()).toEqual(['/', '/docs', '/pricing', '/user/:id'])
+    expect(report.coverage.ratio).toBe(0.25)
+  })
+
+  it('follows a sitemap index (plain and gzipped children, same origin only) and applies route patterns', async () => {
+    const t = tracker({ sitemap: sitemapIndexUrl, routePatterns: ['/pricing/*'] })
+    await t.start()
+    t.notifyNavigation(t.routeFor('/jobs/any-title---3f2a9c1e-0b5d-4c3a-9e1f-1a2b3c4d5e6f'))
+    await t.idle()
+    const report = await t.getReport()
+    // index files are not routes; ids in slugs collapse to one route per page type
+    expect(report.knownRoutes.sort()).toEqual(['/', '/jobs/:slug', '/pricing/*', '/user/:id'])
     expect(report.coverage.ratio).toBe(0.25)
   })
 

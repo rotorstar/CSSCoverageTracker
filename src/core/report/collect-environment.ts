@@ -168,24 +168,54 @@ export async function javascriptReferences(doc: Document): Promise<Set<string>> 
 }
 
 const sitemapCache = new Map<string, Promise<string[]>>()
+/** Child sitemaps read from one index (large sites split into many files). */
+const MAX_CHILD_SITEMAPS = 200
 
-/** Pathnames listed in a same-origin sitemap (route inventory, plan D12). */
+/** Sitemap text; `.xml.gz` files served without Content-Encoding are inflated here. */
+async function sitemapText(url: URL): Promise<string> {
+  const response = await fetch(url.href)
+  if (!response.ok) return ''
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b
+  if (!gzipped) return new TextDecoder().decode(bytes)
+  const inflated = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+  return new Response(inflated).text()
+}
+
+function locations(xml: string, base: URL): { index: boolean; urls: URL[] } {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  const index = doc.documentElement.localName === 'sitemapindex'
+  const urls = [...doc.getElementsByTagNameNS('*', 'loc')].flatMap(loc => {
+    try {
+      return [new URL(loc.textContent?.trim() ?? '', base)]
+    } catch {
+      return []
+    }
+  })
+  return { index, urls }
+}
+
+async function readSitemap(url: URL, origin: string, depth: number): Promise<string[]> {
+  const { index, urls } = locations(await sitemapText(url), url)
+  if (!index) return urls.map(u => u.pathname)
+  if (depth > 0) return []
+  // a sitemap index lists sitemap files, not pages: follow them (same origin only)
+  const children = urls.filter(u => u.origin === origin).slice(0, MAX_CHILD_SITEMAPS)
+  const nested = await Promise.all(
+    children.map(child => readSitemap(child, origin, depth + 1).catch(() => [])),
+  )
+  return nested.flat()
+}
+
+/** Pathnames listed in a same-origin sitemap or sitemap index (route inventory, plan D12). */
 export function sitemapRoutes(doc: Document, location: string): Promise<string[]> {
   const url = new URL(location, doc.baseURI)
-  if (url.origin !== doc.location.origin) return Promise.resolve([])
+  const origin = doc.location.origin
+  if (url.origin !== origin) return Promise.resolve([])
   let cached = sitemapCache.get(url.href)
   if (!cached) {
-    cached = fetch(url.href)
-      .then(response => (response.ok ? response.text() : ''))
-      .then(xml =>
-        [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].flatMap(match => {
-          try {
-            return [new URL(match[1] ?? '', url).pathname]
-          } catch {
-            return []
-          }
-        }),
-      )
+    cached = readSitemap(url, origin, 0)
+      .then(paths => [...new Set(paths)])
       .catch(() => [])
     sitemapCache.set(url.href, cached)
   }
@@ -214,11 +244,12 @@ export async function collectEnvironment(
       known.push(options.routeKey(new URL(path, doc.location.origin)))
     }
   }
+  const knownRoutes = [...new Set(known)]
   const { gzipRatios, groups } = await sheetFacts(doc, options.exclude)
   const hasUnused = [...state.selectors.values()].some(r => r.status === 'unused')
   return {
     version: options.version,
-    knownRoutes: known,
+    knownRoutes,
     timings: stylesheetTimings(),
     gzipRatios,
     groups,

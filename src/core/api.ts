@@ -2,7 +2,7 @@ import { Engine } from './engine/engine'
 import { type CoverageState, createState, mergeStates } from './engine/state'
 import { waitUntilActive } from './observe/lifecycle'
 import type { Report } from './report/types'
-import { defaultRouteKey } from './route/route-key'
+import { defaultRouteKey, matchRoutePattern } from './route/route-key'
 import type { StateConfig } from './selector/normalize'
 import { migrateV1 } from './store/migrate-v1'
 import { type CoverageStore, memoryStore, openStore } from './store/store'
@@ -17,8 +17,14 @@ export interface TrackerOptions {
   readonly storage?: 'indexeddb' | 'memory'
   /** IndexedDB factory (tests, iframes). @default globalThis.indexedDB */
   readonly indexedDB?: IDBFactory
-  /** Map a URL to a route key. @default id-like segments → `:id` */
+  /** Map a URL to a route key. @default id-like segments → `:id`, slugs with ids → `:slug` */
   readonly routeKey?: (url: URL) => string
+  /**
+   * Route patterns checked before `routeKey` (`/jobs/:slug`, `/docs/*`): a
+   * matching path is keyed by its pattern. Plain strings, so they can be passed
+   * where functions cannot (Playwright fixture, `__CSS_COVERAGE_CONFIG__`).
+   */
+  readonly routePatterns?: readonly string[]
   /** Routes the app has (coverage = visited ∩ known / known). */
   readonly knownRoutes?: readonly string[]
   /** Read known routes from a same-origin sitemap (`true` = `/sitemap.xml`). */
@@ -65,10 +71,10 @@ export interface CoverageTracker {
   configure(
     options: Pick<
       TrackerOptions,
-      'knownRoutes' | 'sitemap' | 'confidenceThreshold' | 'fetchCrossOrigin'
+      'knownRoutes' | 'routePatterns' | 'sitemap' | 'confidenceThreshold' | 'fetchCrossOrigin'
     >,
   ): void
-  /** Route key for a path or URL, using the configured `routeKey` (ids → `:id`). */
+  /** Route key for a path or URL, using `routePatterns`, then `routeKey` (ids → `:id`). */
   routeFor(path: string): string
   /** Tell the tracker about a client-side navigation (optionally with a route pattern). */
   notifyNavigation(route?: string): void
@@ -128,13 +134,16 @@ class Tracker implements CoverageTracker {
   configure(
     options: Pick<
       TrackerOptions,
-      'knownRoutes' | 'sitemap' | 'confidenceThreshold' | 'fetchCrossOrigin'
+      'knownRoutes' | 'routePatterns' | 'sitemap' | 'confidenceThreshold' | 'fetchCrossOrigin'
     >,
   ): void {
     const knownRoutes = [
       ...new Set([...(this.options.knownRoutes ?? []), ...(options.knownRoutes ?? [])]),
     ]
-    this.options = { ...this.options, ...options, knownRoutes }
+    const routePatterns = [
+      ...new Set([...(this.options.routePatterns ?? []), ...(options.routePatterns ?? [])]),
+    ]
+    this.options = { ...this.options, ...options, knownRoutes, routePatterns }
   }
 
   constructor(options: TrackerOptions) {
@@ -222,7 +231,12 @@ class Tracker implements CoverageTracker {
   }
 
   routeFor(path: string): string {
-    const url = new URL(path, this.doc.location.href)
+    return this.keyFor(new URL(path, this.doc.location.href))
+  }
+
+  private keyFor(url: URL): string {
+    const pattern = matchRoutePattern(url.pathname, this.options.routePatterns ?? [])
+    if (pattern !== null) return pattern
     return this.options.routeKey ? this.options.routeKey(url) : defaultRouteKey(url)
   }
 
@@ -295,7 +309,7 @@ class Tracker implements CoverageTracker {
       version: __CSS_COVERAGE_VERSION__,
       exclude: this.exclude,
       knownRoutes: this.options.knownRoutes ?? [],
-      routeKey: url => (this.options.routeKey ? this.options.routeKey(url) : defaultRouteKey(url)),
+      routeKey: url => this.keyFor(url),
       sitemap: this.options.sitemap,
       scanScripts: this.options.scanScripts,
       warnings: this.storageWarning ? [this.storageWarning] : [],

@@ -30,6 +30,19 @@ test('React + CSS Modules + Tailwind: routes, popover state, dark mode', async (
   expect(report.contexts.some(c => c.endsWith('dark'))).toBe(true)
 })
 
+test.describe('route patterns passed through the fixture', () => {
+  test.use({ cssCoverageOptions: { routePatterns: ['/admin/*'] } })
+
+  test('group routes without a routeKey function', async ({ page }) => {
+    await page.goto('/')
+    await waitForTracker(page)
+    await page.getByTestId('nav-admin').click()
+    await page.waitForTimeout(400)
+    const report = await pageReport(page)
+    expect(report.routes.map(r => r.route).sort()).toEqual(['/', '/admin/*'])
+  })
+})
+
 test('two tabs of one context merge into one coverage (IndexedDB + BroadcastChannel)', async ({
   context,
 }) => {
