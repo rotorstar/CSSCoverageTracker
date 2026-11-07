@@ -103,6 +103,7 @@
     "@changesets/cli": "3.0.3",
     "@fortawesome/fontawesome-free": "7.3.1",
     "@playwright/test": "1.65.0",
+    "@popperjs/core": "2.11.8",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/vitest-runner": "10.1.1",
     "@tailwindcss/cli": "4.3.5",
