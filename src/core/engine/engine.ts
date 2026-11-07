@@ -285,14 +285,16 @@ export class Engine {
    * Byte accounting after the scan (costly `cssText` serialization), time-sliced
    * and only for selectors not measured yet.
    */
+  /** Rule sizes survive passes: rule objects are stable while their sheet is unchanged. */
+  private readonly ruleBytes = new WeakMap<CSSStyleRule, number>()
+
   private async measure(items: readonly ScanItem[]): Promise<void> {
     const totals = new Map<string, number>()
-    const rules = new Map<CSSStyleRule, number>()
     await new SlicedRun(items, item => {
-      let bytes = rules.get(item.rule)
+      let bytes = this.ruleBytes.get(item.rule)
       if (bytes === undefined) {
         bytes = ownBytes(item.rule)
-        rules.set(item.rule, bytes)
+        this.ruleBytes.set(item.rule, bytes)
       }
       const share = Math.round(bytes / item.share)
       totals.set(item.source, (totals.get(item.source) ?? 0) + share)

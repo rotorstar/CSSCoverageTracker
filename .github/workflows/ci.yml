@@ -50,6 +50,20 @@ jobs:
       - run: npm run check:next
       - run: npm run e2e
 
+  bench:
+    name: Performance benchmark (informational on shared runners)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run bench
+
   mutation:
     name: Mutation score (core/selector, informational)
     if: github.event_name == 'push'

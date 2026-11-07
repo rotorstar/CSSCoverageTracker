@@ -15,6 +15,19 @@ const config: ViteUserConfig = defineConfig({
       },
       {
         test: {
+          // performance acceptance (plan AC-B): run with `npm run bench` on a quiet machine
+          name: 'bench',
+          include: ['test/bench/**/*.test.ts'],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+      {
+        test: {
           name: 'browser',
           include: ['test/browser/**/*.test.{ts,tsx}'],
           globalSetup: ['test/browser/global-setup.ts'],

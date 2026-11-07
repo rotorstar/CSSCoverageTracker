@@ -29,6 +29,26 @@ export function yieldToMain(): Promise<void> {
   })
 }
 
+/** Continuous work allowed before the browser must get a rendering opportunity. */
+const FRAME_BUDGET_MS = 40
+
+/**
+ * Wait for the next frame so the browser can render (avoids long animation
+ * frames from many back-to-back slices). Background tabs do not run rAF, so a
+ * timeout bounds the wait.
+ */
+export function yieldToFrame(): Promise<void> {
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, 50)
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        clearTimeout(timer)
+        setTimeout(resolve, 0)
+      })
+    }
+  })
+}
+
 /**
  * Work queue processed in time slices (≤ `budgetMs` per task). `drainSync`
  * processes as much as fits into a deadline synchronously, e.g. right before
@@ -67,9 +87,14 @@ export class SlicedRun<T> {
 
   /** Runs to completion in slices; resolves to false if aborted before finishing. */
   async run(budgetMs: number): Promise<boolean> {
+    let sinceFrame = performance.now()
     while (!this.done && !this.aborted) {
       this.drainSync(performance.now() + budgetMs)
-      if (!this.done && !this.aborted) await yieldToMain()
+      if (this.done || this.aborted) break
+      if (performance.now() - sinceFrame >= FRAME_BUDGET_MS) {
+        await yieldToFrame()
+        sinceFrame = performance.now()
+      } else await yieldToMain()
     }
     return this.done
   }

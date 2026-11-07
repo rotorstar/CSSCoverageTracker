@@ -75,26 +75,49 @@ describe.runIf(observable)('performance (Chromium)', () => {
     await tracker.idle() // includes deferred byte accounting, which must not cause long frames either
     const coldMs = performance.now() - coldStart
 
-    // per-navigation cost on the next route (what users pay on every client-side navigation)
-    const v1Again = performance.now()
-    v1Scan(selectors)
-    const v1Ms2 = performance.now() - v1Again
-    const start = performance.now()
-    tracker.notifyNavigation('/second')
-    await tracker.idle()
-    const v2Ms = performance.now() - start
+    // per-navigation cost on the next route (what users pay on every client-side navigation);
+    // medians of 5 runs keep shared CI machines from deciding the result
+    const median = (values: number[]) =>
+      [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0
+    const v1Runs: number[] = []
+    const wallRuns: number[] = []
+    const busyRuns: number[] = []
+    const v2Windows: Array<[number, number]> = []
+    for (let i = 0; i < 5; i++) {
+      const v1Start = performance.now()
+      v1Scan(selectors) // blocks by design; excluded from the long-frame check below
+      v1Runs.push(performance.now() - v1Start)
+      await new Promise(r => setTimeout(r, 50))
+      const start = performance.now()
+      tracker.notifyNavigation(`/route-${i}`)
+      await tracker.idle()
+      wallRuns.push(performance.now() - start)
+      v2Windows.push([start, performance.now()])
+      // let the frame end before the next blocking v1 run, so its long frame is not
+      // attributed to the tracker's last continuation
+      await new Promise(r => setTimeout(r, 60))
+      busyRuns.push(tracker.lastPass?.busyMs ?? Number.POSITIVE_INFINITY)
+    }
+    const v1Ms2 = median(v1Runs)
+    const v2Ms = median(wallRuns)
     await new Promise(r => setTimeout(r, 100))
     observer.disconnect()
 
-    const longFrames = frames.filter(f => f.duration > 50)
-    const busyMs = tracker.lastPass?.busyMs ?? Number.POSITIVE_INFINITY
+    // long frames that overlap the tracker's own work (cold pass + next-route passes)
+    const windows: Array<[number, number]> = [[coldStart, coldStart + coldMs], ...v2Windows]
+    const longFrames = frames.filter(
+      f =>
+        f.duration > 50 &&
+        windows.some(([a, b]) => f.startTime < b && f.startTime + f.duration > a),
+    )
+    const busyMs = median(busyRuns)
     console.info(
       `bench: selectors=${selectors.length} nodes=${nodes} v1=${v1Ms.toFixed(0)}/${v1Ms2.toFixed(0)}ms (blocking) ` +
         `v2 cold=${coldMs.toFixed(0)}ms next-route wall=${v2Ms.toFixed(0)}ms busy=${busyMs.toFixed(0)}ms longFrames=${longFrames.length}`,
     )
     expect(longFrames).toEqual([])
     // main-thread work per navigation: v1 blocks for its whole scan, v2 works in ≤ 8 ms slices
-    expect(Math.min(v1Ms, v1Ms2) / busyMs).toBeGreaterThanOrEqual(4)
+    expect(v1Ms2 / busyMs).toBeGreaterThanOrEqual(4)
 
     // M4: persisted state ≤ 25 % of the v1 localStorage payload for the same data
     const persisted = JSON.stringify(toPersisted(tracker.getState())).length

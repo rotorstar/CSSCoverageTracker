@@ -252,7 +252,7 @@ React props: `pathname`, `route`, `options` and the v1 `config` (`storageKey`, `
 5. **Observe**: a MutationObserver re-checks only selectors whose tokens appear; new or changed stylesheets trigger a new pass; navigation via the Navigation API (`navigate` flushes the outgoing route before the URL changes); prerendering and the back/forward cache are handled.
 6. **Persist** to IndexedDB (read-merge-write in one transaction) and sync tabs with BroadcastChannel.
 
-Numbers from the benchmark (Chromium, 17,751 real selectors, 9,298 DOM nodes): v1 blocked the main thread for ~90 ms per navigation; v2 spends ~14 ms of main-thread time per navigation in ≤ 8 ms slices, with 0 long animation frames. Stored data is 23 % of v1's size.
+Numbers from `npm run bench` (Chromium on an Apple-silicon Mac, 17,751 real selectors, 9,298 DOM nodes, medians of 5 runs; shared CI runners measure ~3× instead): v1 blocked the main thread for ~90 ms per navigation; v2 spends ~14 ms of main-thread time per navigation in ≤ 8 ms slices, with 0 long animation frames. Stored data is 23 % of v1's size.
 
 ## Limitations
 
