@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fixture: legacy Bootstrap page via script tag</title>
+    <link rel="stylesheet" href="/node_modules/bootstrap/dist/css/bootstrap.css" />
+  </head>
+  <body>
+    <div class="dropdown">
+      <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Menu</button>
+      <ul class="dropdown-menu"><li><a class="dropdown-item" href="#a">Action</a></li></ul>
+    </div>
+    <script src="/node_modules/bootstrap/dist/js/bootstrap.bundle.js"></script>
+    <script src="/css-coverage-tracker.iife.js" data-css-coverage='{"expose":true,"knownRoutes":["/bootstrap.html"]}'></script>
+  </body>
+</html>

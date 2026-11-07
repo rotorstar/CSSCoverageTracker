@@ -1,0 +1,7 @@
+.imported-used {
+  color: red;
+}
+
+.imported-unused {
+  color: blue;
+}

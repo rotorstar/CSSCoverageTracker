@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+reports/
+.stryker-tmp/
+.superpowers/
+*.tgz
+.DS_Store
+__screenshots__/
+.vitest/
+test-results/
+playwright-report/

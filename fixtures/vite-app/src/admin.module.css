@@ -1,0 +1,7 @@
+.panel {
+  background: #eee;
+}
+
+.adminOnlyUnused {
+  outline: 1px solid blue;
+}

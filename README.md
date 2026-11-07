@@ -1,247 +1,273 @@
 # CSS Coverage Tracker
 
-A lightweight React development tool that tracks CSS selector usage across page navigations. It accumulates coverage data in `localStorage`, shows a live badge with the unused-CSS percentage, and lets you download a detailed JSON report.
+Find unused CSS **safely** — at runtime, across navigations, tabs, developers and test runs.
 
-**Zero dependencies** beyond React 18+. No build step required — drop the single `.tsx` file into your project.
+CSS Coverage Tracker watches which CSS selectors your real pages use while you (or your E2E suite) click through the app. It tells you what is **unused**, what only matters in **interaction states** (open popovers, `:hover`, Bootstrap's `.show`, `[data-state=open]`), how many **KB** you would save per file and route, and how **confident** you can be before deleting anything.
 
-## The Problem
-
-CSS only grows — it never shrinks. Unlike JavaScript, unused CSS selectors don't throw errors. They silently accumulate over months and years: old component styles survive redesigns, utility classes from abandoned experiments linger, framework upgrades leave behind deprecated patterns. The result is bloated stylesheets that slow down FCP/LCP, waste bandwidth, and make maintenance painful.
-
-**Existing tools fall short:**
-
-| Tool | Limitation |
-|------|------------|
-| **Chrome DevTools Coverage** | Single-page snapshot. Resets on every navigation. No way to track coverage across your whole app. |
-| **PurgeCSS / UnCSS** | Build-time static analysis. Misses dynamically toggled classes, JS-driven states, and conditional renders. Can accidentally strip styles you actually need. |
-| **Stylelint** | Lints syntax and conventions — doesn't know which selectors match real DOM elements at runtime. |
-
-CSS Coverage Tracker fills the gap: it runs **in the browser, at runtime**, accumulates results **across navigations**, and gives you a **concrete list** of selectors that never matched any DOM element.
-
-## When to Use This
-
-- **Legacy CSS cleanup** — You inherited a codebase with years of accumulated styles and need to know what's actually used before deleting anything
-- **CSS framework migration** — Moving from Bootstrap to Tailwind, or Tailwind v3 to v4? Find which old utility classes are still referenced
-- **Design system audit** — Discover which component styles are actually used across the app vs. exported but never imported
-- **Post-redesign cleanup** — After a visual refresh, identify selectors left over from the old design
-- **Bundle size optimization** — Your CSS is 200 KB+ and you need data to prioritize what to cut
-- **Pre-migration analysis** — Before moving to CSS-in-JS or CSS Modules, understand your current selector landscape
-- **Continuous monitoring** — Run periodic audits during development to catch CSS bloat before it ships
-
-## What it does
-
-1. After each page navigation, it walks every accessible `<style>` and `<link>` stylesheet
-2. Extracts all CSS selectors (including nested `@media`, `@layer`, `@supports`, `@container`)
-3. Tests each selector against the live DOM via `querySelectorAll`
-4. OR-accumulates results: once a selector matches on *any* page, it stays marked as "used"
-5. Displays a color-coded badge: green (< 15% unused), orange (15–30%), red (> 30%)
-6. Click the badge to see a grouped report and download JSON
-
-## Features
-
-- **Framework-agnostic** — works with Next.js, Vite, CRA, Remix, React Router, or any SPA
-- **Cumulative tracking** — browse your whole app, coverage data persists in localStorage
-- **Grouped report** — unused selectors grouped by class-name prefix (`.glass-*`, `.brand-*`, etc.)
-- **JSON export** — download a structured report with used/unused/print-only selectors
-- **Configurable** — storage key, scan delay, z-index, badge position
-- **Print-aware** — `@media print` selectors tracked separately (not flagged as unused)
-- **CORS-safe** — gracefully skips cross-origin stylesheets it can't read
-- **Pseudo-class stripping** — correctly handles `:hover`, `::before`, `:nth-child()`, etc.
-
-## Installation
-
-Copy `src/CSSCoverageTracker.tsx` into your project. That's it — single file, no npm package (yet).
-
-```bash
-cp src/CSSCoverageTracker.tsx your-project/src/components/dev/
+```
+CSS 24% unused · 38.4 KB · 8 routes          ← badge (bottom-left, isolated in a shadow root)
 ```
 
-## Usage
+- **Never reports live CSS as unused.** A two-stage check separates `used` from `state-dependent`; anything it cannot evaluate is `unknown`, never `unused`. Verified against real Bootstrap 5.3, Tailwind 4.3 + shadcn/ui and Font Awesome 7 output in Chromium, Firefox and WebKit.
+- **Understands modern CSS:** Tailwind escapes (`md:hover:`, `data-[state=open]:`), `:is()/:where()/:has()/:not()`, native nesting, `@scope`, `@layer`, `@container`, `@import`, adopted stylesheets, Shadow DOM and `:host()`.
+- **Built for performance work:** unused KB raw and gzip per file (scaled to real file and transfer sizes), render-blocking flags, route-specific CSS (split candidates), unused `@keyframes`/`@font-face`, before/after diffs.
+- **Cheap to run:** a token prefilter and ≤ 8 ms time slices keep the page responsive (0 long animation frames on 17k selectors / 9k nodes).
+- **Automatable:** Playwright fixture, `css-coverage` CLI (`merge`, `report`, `diff`, `check`) and a CI budget gate.
+- **Framework-agnostic:** React/Next.js adapter, `import 'css-coverage-tracker/auto'` for everything else, or a single `<script>` tag for legacy sites.
+
+## Why another tool?
+
+| Tool | What it misses |
+| --- | --- |
+| **Chrome DevTools Coverage** | Chromium only. Keeps data across client-side route changes, but resets on every reload or full page load, is never persisted or merged across sessions, tabs or developers, and counts `:hover`/`:focus` rules and JS-toggled classes as unused until they are triggered. |
+| **Playwright/Puppeteer CSS coverage**, Project Wallace, monocart | CDP-based (Chromium only); miss styles injected without a `sourceURL` (CSS-in-JS, constructed stylesheets); unapplied interaction states look unused. Their byte-exact numbers can be added to a CSS Coverage Tracker report with `css-coverage merge … --cdp`. |
+| **PurgeCSS, Tailwind content detection** | Static: they see class names in source files, not which ones render. Dynamic classes and dead code paths are guesses. |
+| **UnCSS, DropCSS** | Unmaintained (last releases 2019/2020). |
+
+CSS Coverage Tracker runs **in every browser, at runtime**, accumulates results **across navigations, reloads, tabs, developers and CI runs**, and grades each unused selector with a **deletion confidence**.
+
+## Install
+
+```bash
+npm install --save-dev css-coverage-tracker@alpha
+```
+
+Requirements: an evergreen browser. Node ≥ 24 for the CLI and the Playwright fixture. React ≥ 18 only for the React adapter.
+
+## Quick start
 
 ### Next.js (App Router)
 
-In your root `layout.tsx`, dynamically import the component so it's excluded from production bundles:
+`usePathname()`, `useParams()` and `next/dynamic` with `ssr: false` only work in Client Components, so the tracker gets its own client file:
 
 ```tsx
-// src/app/layout.tsx
+// app/dev-tools.tsx
+'use client'
+
 import dynamic from 'next/dynamic'
+import { useParams, usePathname } from 'next/navigation'
+import { routePattern } from 'css-coverage-tracker/react'
 
 const CSSCoverageTracker = dynamic(
-  () => import('@/components/dev/CSSCoverageTracker')
-    .then(m => ({ default: m.CSSCoverageTracker })),
+  () => import('css-coverage-tracker/react').then(m => m.CSSCoverageTracker),
+  { ssr: false },
 )
 
-function DevTools() {
-  'use client'
+export function DevTools() {
   const pathname = usePathname()
-  return <CSSCoverageTracker pathname={pathname} />
-}
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const params = useParams()
   return (
-    <html>
+    <CSSCoverageTracker
+      pathname={pathname}
+      route={routePattern(pathname, params)}
+      options={{ sitemap: true }}
+    />
+  )
+}
+```
+
+Render it from the root layout only in development. The dynamic `import()` inside the guarded branch keeps the tracker out of production builds entirely:
+
+```tsx
+// app/layout.tsx
+import type { ReactNode } from 'react'
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const DevTools =
+    process.env.NODE_ENV === 'development' ? (await import('./dev-tools')).DevTools : null
+  return (
+    <html lang="en">
       <body>
         {children}
-        {process.env.NODE_ENV === 'development' && <DevTools />}
+        {DevTools ? <DevTools /> : null}
       </body>
     </html>
   )
 }
 ```
 
-> **Why `next/dynamic`?** It ensures the tracker's code is fully tree-shaken in production builds. The `process.env.NODE_ENV` guard alone would still include the import in the bundle.
+`routePattern()` groups `/blog/a` and `/blog/b` into `/blog/[slug]`; `sitemap: true` reads `/sitemap.xml` as route inventory (needed for high-confidence deletions).
 
-### Vite / CRA / plain React
-
-```tsx
-import { CSSCoverageTracker } from './components/dev/CSSCoverageTracker'
-
-function App() {
-  return (
-    <>
-      <RouterOutlet />
-      {import.meta.env.DEV && <CSSCoverageTracker />}
-    </>
-  )
-}
-```
-
-Without a `pathname` prop the component automatically listens to `popstate` events. This covers browser back/forward navigation. For `pushState`-based routers (React Router, TanStack Router), pass the pathname explicitly:
+### React Router, TanStack Router, any React app
 
 ```tsx
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
+import { CSSCoverageTracker } from 'css-coverage-tracker/react'
 
-function DevTools() {
+export function DevTools() {
   const { pathname } = useLocation()
-  return <CSSCoverageTracker pathname={pathname} />
+  return <CSSCoverageTracker pathname={pathname} options={{ knownRoutes: ['/', '/settings'] }} />
 }
 ```
 
-### Remix
+Without a `pathname` prop the tracker follows navigations itself (Navigation API, with a `popstate`/`hashchange` fallback).
 
-```tsx
-import { useLocation } from '@remix-run/react'
+### Vite, Vue, Svelte, Astro, Solid, …
 
-function DevTools() {
-  const { pathname } = useLocation()
-  return <CSSCoverageTracker pathname={pathname} />
-}
+```ts
+// main.ts
+if (import.meta.env.DEV) import('css-coverage-tracker/auto')
 ```
 
-## Configuration
+Options can be set before the import: `window.__CSS_COVERAGE_CONFIG__ = { knownRoutes: ['/'] }`.
 
-All options are optional:
+### Legacy sites, CMS, static HTML (no build step)
 
-```tsx
-<CSSCoverageTracker
-  pathname={pathname}
-  config={{
-    storageKey: 'my-css-tracker',   // default: 'css-coverage-tracker'
-    scanDelay: 3000,                 // default: 2000 (ms after navigation)
-    zIndex: 9999,                    // default: 50
-    position: 'bottom-right',       // default: 'bottom-left'
-  }}
-/>
+```html
+<script
+  src="https://unpkg.com/css-coverage-tracker@alpha/dist/css-coverage-tracker.iife.js"
+  data-css-coverage='{"sitemap": true}'
+></script>
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `storageKey` | `string` | `'css-coverage-tracker'` | localStorage key for persisted data |
-| `scanDelay` | `number` | `2000` | Milliseconds to wait after navigation before scanning |
-| `zIndex` | `number` | `50` | z-index for badge and overlay |
-| `position` | `BadgePosition` | `'bottom-left'` | Badge placement: `'bottom-left'` \| `'bottom-right'` \| `'top-left'` \| `'top-right'` |
+The single file is also available as `dist/css-coverage-tracker.standalone.js` (ESM) for copy-paste setups. The panel works under strict Content Security Policy and Trusted Types: it only uses constructable stylesheets and never `innerHTML`.
 
-## The Badge
+## How a selector is classified
 
-The badge shows:
+Every scan tests each selector in two stages:
 
+| Status | Meaning | Safe to delete? |
+| --- | --- | --- |
+| `used` | The selector as written matches an element (pseudo-elements ignored). | No |
+| `state-dependent` | Only matches once runtime state is ignored: `:hover`, `:focus-visible`, `:checked`, `[data-state=open]`, `[aria-expanded]`, `[open]`, `[hidden]`, Bootstrap's `.show`/`.collapsed`, `.is-*`/`.has-*` … Becomes `used` as soon as the state is observed (e.g. by your E2E suite). | Only if the state is unreachable |
+| `unused` | Valid selector, nothing matches on any visited route. | Check the confidence |
+| `print` | Lives in print-only media (`@media print`, `<link media="print">`). | Separately |
+| `unknown` | Could not be evaluated safely. Never counted as unused. | No |
+
+Results only ever move up (`unused → state-dependent → used`) within an audit. A rule that disappears from a stylesheet that is still loaded (you deleted it, HMR reloaded) becomes **stale** and drops out of the numbers automatically — no reset needed.
+
+**Deletion confidence** for unused selectors:
+
+- **high** — route coverage ≥ 90 % of the route inventory (`knownRoutes`, `sitemap`, CLI `--routes`), all visited routes fully scanned, and none of the selector's class names appear in your same-origin JavaScript.
+- **medium** — no JavaScript references, but route coverage is unknown or incomplete.
+- **low** — the class name appears in JavaScript (probably toggled at runtime). Verify by hand.
+
+State lists are configurable (`options.state`, see `DEFAULT_STATE`).
+
+## The report
+
+Click the badge (or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>) to open the report:
+
+- **Files** — unused KB raw and gzip per stylesheet (scaled to the real file and transfer sizes from Resource Timing), unreadable cross-origin stylesheets.
+- **Routes** — scan status per route and how many selectors are route-specific (used on only one route but loaded globally → split candidates).
+- **Selectors** — filter by status and text, with confidence.
+- **Exports** — JSON (report v2), CSV, Markdown, and build-tool exports (see below).
+- **Rescan** and **New audit** (replaces v1's "Reset").
+
+Cross-origin stylesheets that the browser does not let scripts read are listed as such; set `fetchCrossOrigin: true` to fetch them with CORS and analyze them too.
+
+## Safe cleanup workflow
+
+1. **Collect.** Browse the app (all routes, light and dark theme, a mobile viewport) and/or run your E2E suite with the Playwright fixture. Open popovers, dialogs and menus — or let the E2E suite do it.
+2. **Merge.** `npx css-coverage merge coverage/css -o css-coverage.json --routes routes.txt`
+3. **Read the report.** Start with the files with the most unused KB. Route-specific CSS in global stylesheets is a code-splitting opportunity.
+4. **Delete.** The Markdown export contains a deletion list per file: *whole rules unused*, *selectors to remove from a selector list*, and *state-dependent selectors to verify*. Delete high-confidence items first.
+5. **Or let the build do it.** For classes whose every selector is unused with high confidence, the exports feed your build:
+   - Lightning CSS: `transform({ …, unusedSymbols })` with the exported `unusedSymbols` (it removes rules whose every selector references a listed class; mixed lists such as `h3, .h3` stay)
+   - Tailwind v4: paste the exported `@source not inline("…");` lines into your CSS entry
+   - PurgeCSS: add the exported `blocklist`
+6. **Verify.** HMR rescans automatically; deleted rules become stale. `npx css-coverage diff before.json after.json` shows the KB saved and anything that became unused.
+7. **Prevent regressions.** `npx css-coverage check css-coverage.json --max-unused-kb 50 --no-new-unused --baseline main.json`
+
+### Proving the performance win
+
+The tracker tells you what is safe to remove and how many bytes that is. Prove the user-facing effect with lab and field data:
+
+- **Lighthouse CI** (`@lhci/cli`): compare the `unused-css-rules` and `render-blocking-resources` audits and LCP/FCP before and after.
+- **web-vitals** in the field: LCP, FCP and INP from real users.
+- For expensive selectors (style recalculation time), use the *Selector Stats* view of the Chrome DevTools Performance panel.
+
+## Automation
+
+### Playwright fixture
+
+```ts
+// tests/fixtures.ts — reuse your existing tests unchanged
+export { test, expect } from 'css-coverage-tracker/playwright'
 ```
-CSS: 24% unused (312/1298) · 8p
-       │            │   │     └─ pages visited
-       │            │   └─────── total selectors
-       │            └─────────── unused selectors
-       └──────────────────────── unused percentage
+
+Every test writes a report to `coverage/css/`. Interactions in your tests (opening dialogs, menus, popovers) turn `state-dependent` selectors into `used` ones. Configure with `test.use({ cssCoverageDir: 'coverage/css', cssCoverageOptions: { knownRoutes: […] } })`.
+
+### CLI
+
+```bash
+npx css-coverage merge coverage/css -o css-coverage.json --routes routes.txt \
+  --cdp playwright-css-coverage.json   # optional: byte-exact Chromium data per file
+npx css-coverage report css-coverage.json --format md     # md | html | csv | json
+npx css-coverage report css-coverage.json --format lightningcss -o unused-symbols.json   # or tailwind | purgecss
+npx css-coverage diff main.json css-coverage.json
+npx css-coverage check css-coverage.json --max-unused-kb 50 --max-unused-pct 20 \
+  --baseline main.json --no-new-unused --min-route-coverage 0.9
 ```
 
-Color coding:
-- **Green** — less than 15% unused
-- **Orange** — 15–30% unused
-- **Red** — more than 30% unused
+`check` exits with code 1 when a budget is exceeded and writes a summary to `$GITHUB_STEP_SUMMARY` when available.
 
-## JSON Report Format
-
-Click **Download JSON** in the report overlay to get:
-
-```json
-{
-  "generatedAt": "2026-02-19T10:30:00.000Z",
-  "pagesVisited": ["/", "/about", "/dashboard"],
-  "summary": {
-    "totalSelectors": 1298,
-    "usedSelectors": 986,
-    "unusedSelectors": 280,
-    "printOnlySelectors": 32
-  },
-  "unused": [
-    { "selector": ".glass-morphism", "source": "inline-3" },
-    { "selector": ".brand-gradient-alt", "source": "https://example.com/styles.css" }
-  ],
-  "used": [...],
-  "printOnly": [...]
-}
+```yaml
+# .github/workflows/css-coverage.yml (excerpt)
+- run: npx playwright test
+- run: npx css-coverage check coverage/css --max-unused-kb 50 --routes routes.txt
 ```
 
-## How It Works
+### Programmatic API
 
-### Selector Extraction
+```ts
+import { createCoverageTracker } from 'css-coverage-tracker'
 
-The tracker recursively walks `CSSRuleList` trees, handling:
-- `CSSStyleRule` — extracts and splits comma-separated selectors
-- `CSSMediaRule` — recurses, flagging `@media print` as print-only
-- `CSSLayerBlockRule` — recurses (CSS `@layer`)
-- `CSSSupportsRule` — recurses (`@supports`)
-- `CSSContainerRule` and other nesting — generic `cssRules` fallback
+const tracker = createCoverageTracker({ knownRoutes: ['/', '/pricing'], ui: false })
+await tracker.start()
+// … later
+const report = await tracker.getReport() // report v2 (JSON)
+```
 
-### DOM Testing
+`analyzeSheet(sheet)` and `collectSheets(document)` classify a single stylesheet without any persistence.
 
-Each selector is stripped of pseudo-classes (`:hover`, `:focus`, `:nth-child()`, etc.) and pseudo-elements (`::before`, `::after`) before testing with `querySelectorAll`. This means:
+## Options
 
-- `.btn:hover` is tested as `.btn`
-- `.card::before` is tested as `.card`
-- Pure pseudo selectors like `::selection` are treated as always matching
+| Option | Default | Description |
+| --- | --- | --- |
+| `storageKey` | `'css-coverage-tracker'` | IndexedDB key; v1 localStorage data under this key is migrated. |
+| `storage` | `'indexeddb'` | `'memory'` keeps data per page only. IndexedDB failures (quota) fall back to memory with a warning. |
+| `knownRoutes` | `[]` | Route inventory for coverage and confidence. |
+| `sitemap` | `false` | `true` or a URL: read routes from a same-origin sitemap. |
+| `routeKey` | ids → `:id` | Map a URL to a route key. |
+| `navigation` | `'auto'` | `'manual'`: call `tracker.notifyNavigation(route)` yourself. |
+| `state` | `DEFAULT_STATE` | Attributes and classes treated as runtime state. |
+| `exclude` | — | Elements that never count as usage. |
+| `fetchCrossOrigin` | `false` | Fetch unreadable cross-origin stylesheets with CORS. |
+| `scanScripts` | `true` | Search same-origin scripts for class names (deletion confidence). |
+| `confidenceThreshold` | `0.9` | Route coverage required for high confidence. |
+| `ui` / `position` | `true` / `'bottom-left'` | Badge and report panel. |
+| `debounceMs` | `250` | Debounce for re-checks after DOM changes. |
+| `force` / `mode` | `false` / auto | The tracker is a no-op in production builds unless forced. |
+| `expose` | `false` | Expose the instance as `window.__CSS_COVERAGE__`. |
 
-### OR-Accumulation
+React props: `pathname`, `route`, `options` and the v1 `config` (`storageKey`, `scanDelay` → debounce, `position`; `zIndex` is obsolete because the badge lives in the browser's top layer).
 
-Coverage data is cumulative. If `.sidebar` doesn't match on the homepage but matches on `/dashboard`, it's marked as "used" globally. This is why visiting more pages gives more accurate results.
+## How it works
 
-### Storage Caching
+1. **Collect** every stylesheet the page uses: `document.styleSheets`, `@import`, `adoptedStyleSheets`, open shadow roots, and (opt-in) fetched cross-origin sheets.
+2. **Walk** the CSSOM: nesting (`&` resolved to `:is(parent)`), `@scope`, `@media`/`@layer`/`@supports`/`@container` context, print media.
+3. **Prepare** each selector once with a dependency-free tokenizer (escapes, strings, nested parentheses): the raw form, the state-normalized form and the tokens every match needs.
+4. **Match** against the DOM. A token index of the DOM (classes, ids, tags, attributes) skips most `querySelector` calls; work runs in ≤ 8 ms slices (`scheduler.yield()`, MessageChannel fallback).
+5. **Observe**: a MutationObserver re-checks only selectors whose tokens appear; new or changed stylesheets trigger a new pass; navigation via the Navigation API (`navigate` flushes the outgoing route before the URL changes); prerendering and the back/forward cache are handled.
+6. **Persist** to IndexedDB (read-merge-write in one transaction) and sync tabs with BroadcastChannel.
 
-localStorage reads are cached in memory to avoid expensive synchronous I/O on repeated scans (follows the [Vercel React Best Practices](https://github.com/vercel/next.js) `js-cache-storage` pattern).
+Numbers from the benchmark (Chromium, 17,751 real selectors, 9,298 DOM nodes): v1 blocked the main thread for ~90 ms per navigation; v2 spends ~14 ms of main-thread time per navigation in ≤ 8 ms slices, with 0 long animation frames. Stored data is 23 % of v1's size.
 
 ## Limitations
 
-- **CORS stylesheets** — External stylesheets from other domains can't be read due to browser security. These are silently skipped (logged as "skipped (CORS)").
-- **Dynamic styles** — CSS-in-JS libraries (styled-components, Emotion) inject styles after render. The 2-second scan delay helps, but some dynamic styles may be missed.
-- **Pseudo-class accuracy** — `:hover` selectors are tested without the pseudo-class, so `.btn:hover` is marked "used" if `.btn` exists in the DOM, even if users never hover it.
-- **JavaScript-toggled classes** — Classes added via JS after user interaction (modals, dropdowns) may not be captured unless you trigger those interactions during your browsing session.
-- **iframe styles** — Stylesheets inside iframes are not scanned.
+- **Interaction states** are only `used` once they occur during a scan. Without E2E runs, interaction-heavy CSS stays `state-dependent` — that is intentional: it is not safe to delete.
+- **JS-toggled classes** that are not in the state lists show as `unused` until they appear; the JavaScript reference check lowers their confidence, and your E2E suite can make them `used`.
+- **Shadow DOM**: open shadow roots are analyzed; changes inside shadow roots are picked up on the next pass (navigation or *Rescan*). Closed shadow roots and iframes are not scanned.
+- **`@scope … to (…)`** limits are ignored (selectors are treated as broader, never narrower).
+- **Selector cost** (style recalculation time) is not measured; use DevTools Selector Stats.
 
-## Tips for Accurate Results
+## Migrating from v1
 
-1. **Visit every route** — The more pages you visit, the more accurate the report
-2. **Interact with the UI** — Open modals, dropdowns, tooltips to expose dynamic classes
-3. **Check the page count** — The badge shows how many pages contributed to the data
-4. **Use the Reset button** — Clear old data when starting a fresh audit
-5. **Compare over time** — Download JSON reports before and after CSS cleanup
-
-## Performance
-
-The component is designed to have minimal impact on development performance:
-
-- Scans run on a debounced timer (default 2s after navigation), never during interaction
-- RegExp patterns are hoisted to module scope (not recreated per call)
-- localStorage reads are cached in memory
-- The component only renders a small fixed badge — the overlay is conditional
+- Replace the copied `CSSCoverageTracker.tsx` with the package: `import { CSSCoverageTracker } from 'css-coverage-tracker/react'`. Props are compatible.
+- Existing v1 data in localStorage is migrated on first start.
+- The JSON export is now **report v2** (`schema: "css-coverage/v2"`), with bytes, routes, confidence and deletion groups. A JSON Schema ships as `dist/report.schema.json`.
+- "Reset" is now "New audit".
 
 ## License
 

@@ -1,0 +1,16 @@
+.linked-used {
+  color: red;
+}
+
+.linked-dead-a,
+.linked-used-too {
+  color: blue;
+}
+
+.linked-dead-b {
+  color: green;
+}
+
+.js-toggled {
+  display: block;
+}

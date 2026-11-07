@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self' ws:; require-trusted-types-for 'script'"
+    />
+    <title>Fixture: strict CSP + Trusted Types</title>
+    <link rel="stylesheet" href="/csp.css" />
+  </head>
+  <body>
+    <p class="csp-used">Strict CSP page</p>
+    <script src="/css-coverage-tracker.iife.js" data-css-coverage='{"expose":true,"storage":"memory"}'></script>
+  </body>
+</html>

@@ -1,0 +1,136 @@
+{
+  "name": "css-coverage-tracker",
+  "version": "1.0.0",
+  "description": "Find unused CSS safely: runtime selector coverage across navigations, tabs and test runs. State-aware, framework-agnostic, CI-ready.",
+  "keywords": [
+    "css",
+    "coverage",
+    "unused-css",
+    "dead-code",
+    "performance",
+    "devtools",
+    "tailwind",
+    "react",
+    "playwright"
+  ],
+  "homepage": "https://github.com/rotorstar/CSSCoverageTracker#readme",
+  "bugs": {
+    "url": "https://github.com/rotorstar/CSSCoverageTracker/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rotorstar/CSSCoverageTracker.git"
+  },
+  "license": "MIT",
+  "author": "FactoryAI / talent.de",
+  "type": "module",
+  "sideEffects": [
+    "./dist/auto.js",
+    "./dist/css-coverage-tracker.iife.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./auto": {
+      "types": "./dist/auto.d.ts",
+      "default": "./dist/auto.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright.d.mts",
+      "default": "./dist/playwright.mjs"
+    },
+    "./standalone": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/css-coverage-tracker.standalone.js"
+    },
+    "./iife": {
+      "types": "./dist/auto.d.ts",
+      "default": "./dist/css-coverage-tracker.iife.js"
+    },
+    "./package.json": "./package.json",
+    "./report.schema.json": "./dist/report.schema.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/build-schema.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "fixtures:build": "node scripts/build-fixtures.mjs",
+    "mutation": "stryker run",
+    "size": "node scripts/check-size.mjs",
+    "pack:check": "npm run build && publint && attw --pack . --profile esm-only",
+    "changeset": "changeset",
+    "release": "npm run build && changeset publish",
+    "fixtures:install": "npm --prefix fixtures/vite-app install --no-audit --no-fund && npm --prefix fixtures/next16 install --no-audit --no-fund",
+    "e2e": "npm run build && node scripts/prepare-e2e.mjs && playwright test",
+    "check:next": "node scripts/check-next-fixture.mjs"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.50",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "@playwright/test": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@biomejs/biome": "2.6.6",
+    "@changesets/cli": "3.0.3",
+    "@fortawesome/fontawesome-free": "7.3.1",
+    "@playwright/test": "1.65.0",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
+    "@tailwindcss/cli": "4.3.5",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/browser-playwright": "5.1.0",
+    "axe-core": "4.14.0",
+    "bootstrap": "5.3.8",
+    "esbuild": "0.28.2",
+    "fast-check": "4.10.2",
+    "lighthouse": "13.6.0",
+    "lightningcss": "1.33.0",
+    "playwright": "1.65.0",
+    "postcss-selector-parser": "7.1.7",
+    "publint": "0.3.25",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.5",
+    "tsdown": "0.23.7",
+    "typescript": "7.0.2",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "bin": {
+    "css-coverage": "./dist/cli.mjs"
+  }
+}

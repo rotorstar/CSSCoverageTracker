@@ -1,0 +1,11 @@
+.page {
+  padding: 1rem;
+}
+
+.hero {
+  margin-block: 1rem;
+}
+
+.unusedModuleClass {
+  border: 1px solid red;
+}
