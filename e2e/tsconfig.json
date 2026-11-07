@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    ".",
+    "../playwright.config.ts",
+    "../src"
+  ],
+  "exclude": []
+}

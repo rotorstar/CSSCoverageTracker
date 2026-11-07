@@ -78,7 +78,7 @@
     "changeset": "changeset",
     "release": "npm run build && changeset publish",
     "fixtures:install": "npm --prefix fixtures/vite-app install --no-audit --no-fund && npm --prefix fixtures/next16 install --no-audit --no-fund",
-    "e2e": "npm run build && node scripts/prepare-e2e.mjs && playwright test",
+    "e2e": "npm run build && node scripts/prepare-e2e.mjs && tsc --noEmit -p e2e && playwright test",
     "check:next": "node scripts/check-next-fixture.mjs"
   },
   "peerDependencies": {
