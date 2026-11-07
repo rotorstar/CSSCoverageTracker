@@ -85,8 +85,6 @@ describe('report v2 from a live page', () => {
     await fetching.start()
     fetching.notifyNavigation('/')
     await fetching.idle()
-    await new Promise(r => setTimeout(r, 300))
-    await fetching.idle()
     const after = await fetching.getReport()
     const source = after.sources.find(s => s.key === crossOrigin.href)
     expect(source?.kind).toBe('fetched')

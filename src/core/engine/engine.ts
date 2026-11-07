@@ -311,7 +311,7 @@ export class Engine {
   }
 
   /** Learn the tokens of new/changed elements and re-check the selectors that use them. */
-  observe(elements: readonly Element[], deep: boolean): void {
+  observe(elements: readonly Element[], deep: boolean, syncMs: number = 0): void {
     const index = this.index(this.options.doc)
     for (const element of elements) {
       const tokens = deep ? index.add(element) : index.addOne(element)
@@ -325,8 +325,11 @@ export class Engine {
       .filter((item): item is ScanItem => item !== undefined)
     this.pending.clear()
     const route = this.route
+    const run = new SlicedRun(items, item => this.apply(item, route))
+    // synchronous head start: classify against the DOM as it is right now
+    if (syncMs > 0) run.drainSync(performance.now() + syncMs)
     this.incrementalPromise = this.incrementalPromise.then(() =>
-      new SlicedRun(items, item => this.apply(item, route)).run(this.options.budgetMs ?? 8),
+      run.run(this.options.budgetMs ?? 8),
     )
   }
 

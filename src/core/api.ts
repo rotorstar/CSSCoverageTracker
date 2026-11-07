@@ -89,6 +89,8 @@ export interface CoverageTracker {
 const REGISTRY = Symbol.for('css-coverage-tracker')
 /** Longest a burst of DOM mutations can postpone a re-check. */
 const MAX_MUTATION_WAIT_MS = 1000
+/** Synchronous budget for classifying pending changes right before user input. */
+const INPUT_FLUSH_MS = 30
 
 function isProductionBuild(): boolean {
   try {
@@ -118,6 +120,8 @@ class Tracker implements CoverageTracker {
   private lastUrl = ''
   private channel: BroadcastChannel | null = null
   private stopped = false
+  /** Pending cross-origin stylesheet fetches (part of "work in progress" for idle()). */
+  private fetching: Promise<void> = Promise.resolve()
 
   options: TrackerOptions
 
@@ -240,7 +244,7 @@ class Tracker implements CoverageTracker {
     this.recordContext()
     void this.engine.startPass(key).then(() => {
       this.changed()
-      void this.fetchCrossOriginSheets()
+      this.fetching = this.fetchCrossOriginSheets()
     })
   }
 
@@ -259,6 +263,8 @@ class Tracker implements CoverageTracker {
         setTimeout(resolve, Math.min(this.options.debounceMs ?? 250, 50)),
       )
     }
+    await this.engine.idle()
+    await this.fetching
     await this.engine.idle()
   }
 
@@ -279,7 +285,7 @@ class Tracker implements CoverageTracker {
   }
 
   async getReport(): Promise<Report> {
-    await this.engine.idle()
+    await this.idle()
     // report building is loaded on demand: the always-on core stays small
     const [{ buildReport }, { collectEnvironment }] = await Promise.all([
       import('./report/build'),
@@ -355,7 +361,7 @@ class Tracker implements CoverageTracker {
     const touchesSheets = (node: Node): boolean =>
       isSheetOwner(node) ||
       (node instanceof Element && node.querySelector('style, link[rel~="stylesheet" i]') !== null)
-    const observer = new MutationObserver(records => {
+    const handle = (records: readonly MutationRecord[]): void => {
       for (const record of records) {
         if (record.type === 'childList') {
           if (isSheetOwner(record.target)) this.sheetsChanged = true // <style> text replaced (HMR)
@@ -374,6 +380,9 @@ class Tracker implements CoverageTracker {
           if (isSheetOwner(record.target)) this.sheetsChanged = true // href/media/disabled
         }
       }
+    }
+    const observer = new MutationObserver(records => {
+      handle(records)
       this.scheduleMutations()
     })
     observer.observe(this.doc.documentElement, {
@@ -390,9 +399,23 @@ class Tracker implements CoverageTracker {
       }
     }
     this.doc.addEventListener('load', onLoad, true)
+    // The next interaction may end the visible state (outside click closes a popover):
+    // classify pending changes synchronously before any app handler runs.
+    const view = this.doc.defaultView
+    const onInput = (): void => {
+      const pending = observer.takeRecords() // not yet delivered to the callback
+      if (pending.length > 0) handle(pending)
+      if (this.mutationTimer === null && pending.length === 0) return
+      if (this.mutationTimer !== null) clearTimeout(this.mutationTimer)
+      this.processMutations(INPUT_FLUSH_MS)
+    }
+    view?.addEventListener('pointerdown', onInput, true)
+    view?.addEventListener('keydown', onInput, true)
     this.disposers.push(() => {
       observer.disconnect()
       this.doc.removeEventListener('load', onLoad, true)
+      view?.removeEventListener('pointerdown', onInput, true)
+      view?.removeEventListener('keydown', onInput, true)
     })
   }
 
@@ -409,7 +432,7 @@ class Tracker implements CoverageTracker {
     )
   }
 
-  private processMutations(): void {
+  private processMutations(syncMs: number = 0): void {
     this.mutationTimer = null
     this.firstMutationAt = 0
     this.processedGeneration = this.mutationGeneration
@@ -426,8 +449,8 @@ class Tracker implements CoverageTracker {
         return
       }
     }
-    this.engine.observe([...deep].filter(keep), true)
-    this.engine.observe([...shallow].filter(keep), false)
+    this.engine.observe([...deep].filter(keep), true, syncMs)
+    this.engine.observe([...shallow].filter(keep), false, syncMs)
     if (this.options.navigation !== 'manual' && this.doc.location.href !== this.lastUrl) {
       this.notifyNavigation()
     }

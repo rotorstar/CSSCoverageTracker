@@ -106,12 +106,16 @@ export function mountPanel(tracker: CoverageTracker, options: PanelOptions = {})
   let statusFilter = 'unused'
   let report: Report | null = null
 
+  // Keep the same text node: replacing it between pointerdown and click makes WebKit drop the click.
+  const label = document.createTextNode('')
+  badge.append(label)
   const updateBadge = (): void => {
     const { percent, unusedBytes, routes } = badgeSummary(tracker.getState())
-    badge.textContent = `CSS ${percent}% unused · ${kb(unusedBytes)} · ${routes} route${routes === 1 ? '' : 's'}`
+    const text = `CSS ${percent}% unused · ${kb(unusedBytes)} · ${routes} route${routes === 1 ? '' : 's'}`
+    if (label.data !== text) label.data = text
     badge.classList.toggle('warn', percent > thresholds.warn && percent <= thresholds.bad)
     badge.classList.toggle('bad', percent > thresholds.bad)
-    badge.setAttribute('aria-label', `CSS coverage: ${badge.textContent}. Open report`)
+    badge.setAttribute('aria-label', `CSS coverage: ${text}. Open report`)
   }
 
   const results = (): HTMLElement => {

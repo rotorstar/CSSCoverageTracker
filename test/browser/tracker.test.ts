@@ -304,3 +304,23 @@ describe('review fix pass (Stage B–D)', () => {
     expect(t.storageWarning).toBeNull()
   })
 })
+
+describe('states left by the next interaction are still observed', () => {
+  it('pending re-checks run before a pointerdown changes the DOM again', async () => {
+    addStyle('.menu[data-state="open"]{display:block}')
+    const root = mount('<div class="menu" data-state="closed"></div>')
+    const t = tracker({ debounceMs: 500 })
+    await t.start()
+    t.notifyNavigation('/')
+    await t.idle()
+    const menu = root.querySelector('.menu')
+    menu?.setAttribute('data-state', 'open')
+    await new Promise(r => setTimeout(r, 30)) // MutationObserver delivered, debounce still pending
+    // the app closes the menu on the next pointerdown (outside click)
+    const close = () => menu?.setAttribute('data-state', 'closed')
+    document.addEventListener('pointerdown', close, { once: true })
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await t.idle()
+    expect(find(t, '.menu[data-state="open"]')?.status).toBe('used')
+  })
+})

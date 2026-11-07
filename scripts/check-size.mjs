@@ -8,8 +8,8 @@ import { transformSync } from 'esbuild'
 
 const DIST = 'dist'
 const budgets = [
-  { name: 'core (always loaded)', entry: 'index.js', limit: 11 * 1024 },
-  { name: 'react adapter (always loaded)', entry: 'react.js', limit: 11.5 * 1024 },
+  { name: 'core (always loaded)', entry: 'index.js', limit: 11.5 * 1024 },
+  { name: 'react adapter (always loaded)', entry: 'react.js', limit: 12 * 1024 },
   { name: 'UI + report (lazy)', lazyOf: 'index.js', limit: 12 * 1024 },
 ]
 

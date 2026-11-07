@@ -106,3 +106,17 @@ describe('UI panel (C3)', () => {
     expect(lightning?.disabled).toBe(true)
   })
 })
+
+describe('badge updates never break a click in progress', () => {
+  it('keeps the same text node when the numbers change', async () => {
+    const { tracker, shadow } = await setup()
+    const badge = shadow.querySelector('.badge')
+    const node = badge?.firstChild
+    const style = document.createElement('style')
+    style.textContent = '.another-dead-rule{color:red}'
+    document.head.append(style)
+    cleanups.push(() => style.remove())
+    await tracker.scan()
+    expect(badge?.firstChild).toBe(node)
+  })
+})

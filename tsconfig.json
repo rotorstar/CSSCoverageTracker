@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "lib": [
-      "es2024",
-      "dom",
-      "dom.iterable"
-    ],
+    "lib": ["es2024", "dom", "dom.iterable"],
     "module": "preserve",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -20,18 +16,8 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": [
-      "node",
-      "vite/client"
-    ]
+    "types": ["node", "vite/client"]
   },
-  "include": [
-    "src",
-    "test",
-    "scripts",
-    "*.config.ts"
-  ],
-  "exclude": [
-    "playwright.config.ts"
-  ]
+  "include": ["src", "test", "scripts", "*.config.ts"],
+  "exclude": ["playwright.config.ts"]
 }
