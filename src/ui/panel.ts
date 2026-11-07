@@ -326,6 +326,9 @@ export function mountPanel(tracker: CoverageTracker, options: PanelOptions = {})
 
   const open = (): void => {
     if (dialog.open) return
+    // never show the previous report's controls: input there would land in
+    // fields that the fresh render replaces a moment later
+    body.replaceChildren(h('p', { class: 'muted' }, 'Collecting…'))
     dialog.showModal()
     void refresh()
   }

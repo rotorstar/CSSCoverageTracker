@@ -22,7 +22,8 @@ function render(): { root: Root; container: HTMLElement } {
 }
 
 const tracker = () => Reflect.get(globalThis, Symbol.for('css-coverage-tracker'))
-const settle = () => new Promise(r => setTimeout(r, 150))
+// idle() covers boot (store load, panel mount) and the pass the adapter started
+const settle = (): Promise<void> => tracker().idle()
 
 describe('React adapter', () => {
   it('starts the shared tracker, migrates v1 data and follows the pathname prop', async () => {

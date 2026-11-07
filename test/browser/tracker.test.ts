@@ -42,6 +42,16 @@ const find = (t: CoverageTracker, selector: string) =>
   [...t.getState().selectors.values()].find(r => r.selector === selector)
 
 describe('tracker (Stage B)', () => {
+  it('idle() waits for a start() still booting (IndexedDB open + first pass)', async () => {
+    addStyle('.boot-used { color: red }')
+    mount('<i class="boot-used"></i>')
+    const t = tracker({ navigation: 'auto' })
+    void t.start() // e.g. the Playwright fixture's init script: nobody awaits it
+    await t.idle()
+    expect(t.getState().routes.size).toBeGreaterThan(0)
+    expect(find(t, '.boot-used')?.status).toBe('used')
+  })
+
   it('attributes selectors to the routes they matched on', async () => {
     addStyle('.home{color:red}.admin-only{color:blue}.shared{color:green}')
     const root = mount('<div class="home shared"></div>')

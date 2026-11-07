@@ -42,6 +42,21 @@ const statuses = (t: CoverageTracker) =>
   [...t.getState().selectors.values()].map(r => `${r.selector}=${r.status}`).sort()
 
 describe('UI panel (C3)', () => {
+  it('reopening never offers the previous report’s controls (input would go to a detached field)', async () => {
+    const { shadow } = await setup()
+    const badge = shadow.querySelector<HTMLButtonElement>('.badge')
+    const dialog = shadow.querySelector('dialog')
+    badge?.click()
+    await vi.waitFor(() => expect(dialog?.querySelector('input[type="search"]')).not.toBeNull())
+    dialog?.close()
+    badge?.click()
+    expect(dialog?.open).toBe(true)
+    // synchronously after opening: the fresh report has not rendered yet
+    expect(dialog?.querySelector('input[type="search"]')).toBeNull()
+    expect(dialog?.textContent).toMatch(/Collecting/)
+    await vi.waitFor(() => expect(dialog?.querySelector('input[type="search"]')).not.toBeNull())
+  })
+
   it('mounts under <html> (not <body>) with a badge showing unused share and routes', async () => {
     const { host, shadow } = await setup()
     expect(host.parentElement).toBe(document.documentElement)

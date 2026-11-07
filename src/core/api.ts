@@ -269,6 +269,9 @@ class Tracker implements CoverageTracker {
   }
 
   async idle(): Promise<void> {
+    // a start() nobody awaited (init scripts, adapters) is work in progress too:
+    // until it has loaded the store and begun the first pass there is nothing to report
+    if (this.starting) await this.starting
     // changes pending when idle() was called count as work in progress (later ones don't,
     // so a page that mutates forever cannot keep idle() from resolving)
     const target = this.mutationGeneration
